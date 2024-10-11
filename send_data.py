@@ -21,23 +21,28 @@ def read_csv(file_path):
         df = pd.read_csv(file_path, delimiter=';')
         data = []
         for index, row in df.iterrows():
-            # Convert date from DD.MM.YYYY to YYYY-MM-DD if it exists and is a string
             date_str = row.get("date", "")
             if pd.notna(date_str) and isinstance(date_str, str):
                 try:
                     date_obj = datetime.strptime(date_str, "%d.%m.%Y")
                     formatted_date = date_obj.strftime("%Y-%m-%d")
                 except ValueError:
-                    formatted_date = "" 
+                    print(f"Date format error in row {index}, setting empty date")
+                    formatted_date = ""
             else:
-                formatted_date = "" 
+                formatted_date = ""
 
+            event_type_str = row.get("event_type", "")
+            if pd.notna(event_type_str) and isinstance(event_type_str, str):
+                event_type = event_type_mapping.get(event_type_str, 0)
+            else:
+                event_type = int(event_type_str) if pd.notna(event_type_str) else 0
 
             article = {
                 "title": row.get("title", ""),
                 "description": row.get("description", "") if pd.notna(row.get("description")) else "",
                 "slug": row.get("slug", ""),
-                "event_type": int(row.get("event_type", 0)) if pd.notna(row.get("event_type")) else 0,
+                "event_type": event_type,
                 "metaTitle": row.get("metaTitle", "") if pd.notna(row.get("metaTitle")) else "",
                 "metaDescription": row.get("metaDescription", "") if pd.notna(row.get("metaDescription")) else "",
                 "metaKeywords": row.get("metaKeywords", "") if pd.notna(row.get("metaKeywords")) else "",
