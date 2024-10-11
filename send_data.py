@@ -15,29 +15,52 @@ EVENT_TYPE_MAPPING = os.getenv("EVENT_TYPE_MAPPING")
 event_type_mapping = dict(item.split(":") for item in EVENT_TYPE_MAPPING.split(","))
 event_type_mapping = {k: int(v) for k, v in event_type_mapping.items()}
 
+import pandas as pd
+from datetime import datetime
+
 def read_csv(file_path):
     print(f"Reading CSV file: {file_path}")
+
+    with open(file_path, 'r') as f:
+        first_line = f.readline()
+        if ',' in first_line:
+            delimiter = ','
+        elif ';' in first_line:
+            delimiter = ';'
+        else:
+            print("Unknown delimiter, please use a comma or semicolon.")
+            return []
+
     try:
-        df = pd.read_csv(file_path, delimiter=';')
+        df = pd.read_csv(file_path, delimiter=delimiter, quotechar='"', engine='python')
+        print(f"File read successfully with {delimiter} delimiter.")
+        print("Dataframe preview:")
+        print(df.head())
+        
         data = []
         for index, row in df.iterrows():
+            # Extract and parse the date
             date_str = row.get("date", "")
+            formatted_date = ""
             if pd.notna(date_str) and isinstance(date_str, str):
-                try:
-                    date_obj = datetime.strptime(date_str, "%d.%m.%Y")
-                    formatted_date = date_obj.strftime("%Y-%m-%d")
-                except ValueError:
+                for fmt in ("%d.%m.%Y", "%m.%d.%Y"):  # Try multiple date formats
+                    try:
+                        date_obj = datetime.strptime(date_str, fmt)
+                        formatted_date = date_obj.strftime("%Y-%m-%d")
+                        break  # Stop if a valid format is found
+                    except ValueError:
+                        continue
+                if not formatted_date:
                     print(f"Date format error in row {index}, setting empty date")
-                    formatted_date = ""
-            else:
-                formatted_date = ""
-
+            
+            # Map the event_type if it’s a string
             event_type_str = row.get("event_type", "")
             if pd.notna(event_type_str) and isinstance(event_type_str, str):
-                event_type = event_type_mapping.get(event_type_str, 0)
+                event_type = event_type_mapping.get(event_type_str, 0)  # Default to 0 if not found
             else:
                 event_type = int(event_type_str) if pd.notna(event_type_str) else 0
 
+            # Build the article data structure
             article = {
                 "title": row.get("title", ""),
                 "description": row.get("description", "") if pd.notna(row.get("description")) else "",
@@ -53,11 +76,13 @@ def read_csv(file_path):
             }
             print("Processed row:", article)  
             data.append({"data": article})
+        
         print("Parsed data:", data)
         return data
     except Exception as e:
         print(f"Error reading CSV: {e}")
         return []
+
 
 def send_data(data):
     headers = {
@@ -73,7 +98,7 @@ def send_data(data):
         try:
             response = requests.post(STRAPI_URL, json=payload, headers=headers)
             response.raise_for_status()
-            print(f"Successfully sent: {filtered_data['title']}")
+            print(f"Successfully sent: {filtered_data.get('title', 'Unknown Title')}")
         except requests.exceptions.RequestException as e:
             if e.response:
                 print(f"Error with {filtered_data.get('title', 'Unknown')}:", e.response.text)
